@@ -1,0 +1,77 @@
+
+
+terminial opened by 
+alt+ctrl+t
+
+ls   # list all the files in the current directory
+pwd  # show the current working path
+
+# go to the directory
+cd Music
+pwd
+/home/uqnwang6/Music
+cd ..   # return to the parent dirctory
+
+done by typing 'cd M Tab'
+Tab = auto coplition.
+
+select copy
+midkey paste
+
+# making directory
+mkdir abc
+
+# making directory recursively
+mkdir -p a/b/c/d
+
+
+# check manual mkdir
+man mkdir
+
+
+# come back to the home directory
+cd ~ 
+
+# create a file named abc
+touch abc 
+
+# delete file called abc
+rm abc 
+
+1. system no responce. cultural difference
+2. no dustbin
+(1) . typing is usually done after thought
+(2) . using backup method  % crontab
+
+
+# delete directory and files inside
+mkdir abc
+rm -r abc # recursive
+
+
+# check all command history
+history
+
+
+# search from all previous history
+ctrl+r
+
+
+rdesktop termserv.eait.uq.edu.au
+alias terms3='nohup rdesktop termserv.eait.uq.edu.au -K -u username -d KRB5.UQ.EDU.AU -g 1680x1010 -r clipboard:PRIMARYCLIPBOARD  -r disk:home=/home/chenming 2>&1>/dev/null &'
+
+#admin
+
+superuser 
+1. install software
+no virus
+sudo apt-get update  
+sudo apt-get install geany
+
+
+vi ~/.bashrc
+
+. ~/.bashrc
+
+
+ssh
