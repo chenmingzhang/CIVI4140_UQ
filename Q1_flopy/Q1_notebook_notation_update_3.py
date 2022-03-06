@@ -1,14 +1,21 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# 
+# """
+# Created on Tue Feb 22 14:42:56 2022
+# @author: uqczhan2
+# if hydraulic conductivity of the sandy layer
+# is reduced, the large hydraulic conductivity in the oscillating boundary
+# needs to be redued accordingLy_m 
+# """
+# 
+# This example uses modflow2005
+
+# In[1]:
+
+
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Feb 22 14:42:56 2022
-
-@author: uqczhan2
-if hydraulic conductivity of the sandy layer
-is reduced, the large hydraulic conductivity in the oscillating boundary
-needs to be redued accordingLy_m 
-"""
-
-import os
 import sys
 import glob
 import platform
@@ -17,8 +24,8 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
-
-# run installed version of flopy or add local path
+import matplotlib.pyplot as plt
+import flopy.utils.binaryfile as bf
 try:
     import flopy
 except:
@@ -26,18 +33,20 @@ except:
     sys.path.append(fpth)
     import flopy
 
+
+# In[2]:
+
+
 print(sys.version)
 print('numpy version: {}'.format(np.__version__))
 print('matplotlib version: {}'.format(mpl.__version__))
 print('pandas version: {}'.format(pd.__version__))
 print('flopy version: {}'.format(flopy.__version__))
 
-import flopy
-import numpy as np
-import matplotlib.pyplot as plt
+
+# In[3]:
 
 
-# %% model set_up
 Lx_m   = 1000.    # from plot, y is plotted from left to right
 Ly_m   = 10.     # from plot, y is plotted upward
 ztop_m = 0.    # top elevation of z axis (gravity)
@@ -49,204 +58,156 @@ delr_m = Lx_m / ncol
 delc_m = Ly_m / nrow
 delv_m = (ztop_m - zbot_m) / nlay             # layer thickness
 botm_list_m = np.linspace(ztop_m, zbot_m, nlay + 1)  # layer elevation array
-
-#dis.itmuni_dict
-#dis.itmuni
-#hk = 0.3   # how to change the time unit in flopy?  ITMUNI in dis #dis.itmuni_dict horizontal hydraulic conductivity
-#vka = 0.3  # vertical hydraulic conductivity
-hk = np.ones((nlay, nrow, ncol), dtype=np.int32) * 10. #*30.   # making hydraulic conductivity array  [lay_row_column]
-hk[:,:,0]= 100.           # first column has a very high hydraulic conductivity
+kh_mPday=20.0
+hk = np.ones((nlay, nrow, ncol), dtype=np.int32) * kh_mPday #*30.   
+# making hydraulic conductivity array  [lay_row_column]
+hk[:,:,0]= 100.     # first column has a very high hydraulic conductivity
 vka = hk
-
-
-sy = 0.25    # specific yield
+sy = 0.25    # specific yield, equivalent to effective porosity
 ss = 1.e-4   #  specific storitivity 
-laytyp = np.ones(nlay)   # vunconfined 1 
+laytyp = np.ones(nlay)   # unconfined = 1 
 
 
-
-# Variables for the BAS package
-ibound = np.ones((nlay, nrow, ncol), dtype=np.int32) + 2    # [lay_row_column]
-lay_id_chd = 9
-row_id_chd = 0
-col_id_chd = 0
-ibound_chd = 1
-ibound[lay_id_chd][row_id_chd][col_id_chd]=ibound_chd   # why do we need three layers here?? because the model is 3-d
-#ibound[lay_id_chd][row_id_chd][1]=ibound_chd   # why do we need three layers here?? because the model is 3-d
+# In[4]:
 
 
 # interesting to see that the it is better to be converged, if the head is above zero 
-strt = 1. * np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
-
-# time step parameters
+strt = -15. * np.ones((nlay, nrow, ncol), dtype=np.float32)   # initial hydraulic head
 nper   = 3                  # number of stress periods
-perlen = [100, 100, 100]  # length of stress periods  days 
-nstp   = [100, 100, 100]   # number of steps per stress periods
-steady = [False, False, False]   # if the results needs to be in steady state.
+nstp = 200  # 100 as default
+perlen= 100
+perlen_list = [perlen, perlen, perlen]    # length of stress periods  days 
+nstp_list   = [nstp, nstp, nstp]    # number of steps per stress periods
+steady = [False, False, False]   # if the results needs to be in steady state
+
+
+# In[5]:
+
 
 modelname = 'tutorial2'
 mf = flopy.modflow.Modflow(modelname, exe_name='mf2005')
-dis = flopy.modflow.ModflowDis(mf, nlay, nrow, ncol, delr=delr_m, delc=delc_m,
-                                      top=ztop_m, botm=botm_list_m[1:],
-                                      nper=nper, perlen=perlen, nstp=nstp, steady=steady,
-                                      itmuni=4)   #itmuni 4 means time unit is days
+dis = flopy.modflow.ModflowDis(mf, 
+                               nlay, 
+                               nrow, 
+                               ncol, 
+                               delr=delr_m, 
+                               delc=delc_m,
+                               top=ztop_m, botm=botm_list_m[1:],
+                               nper=nper, perlen=perlen, nstp=nstp_list, steady=steady,
+                               itmuni=4)   #itmuni 4 means time unit is days
+
+
+# In[6]:
+
+
+def get_lrc_from_coordinates(x,y,z,dis=dis) :
+    """
+    function to get the lrc of the coordinates. 
+    """
+    [row,column]= dis.get_rc_from_node_coordinates(x,y)
+    layer = dis.get_layer(row,column,z)
+    return (layer, row , column)
+
+point_chd = {'x':1,'y':5,'z':-20}
+(point_chd['l'],point_chd['r'],point_chd['c'] )= get_lrc_from_coordinates(
+    point_chd['x'],
+    point_chd['y'],
+    point_chd['z'])
+
+ibound = np.zeros((nlay, nrow, ncol), dtype=np.int32) + 3    # [lay_row_column] active cell has ibound of 3
+lay_id_chd = nlay-1  # the cell at bottom left will be prescribed with chd package.  
+row_id_chd = 0
+col_id_chd = 0
+ibound_chd = 1  # the cell prescibed with chd package are masked with ibound of 1
+# # why 3-D here?? because the model is 3-d, with one row
+ibound[point_chd['l'],point_chd['r'],point_chd['c']] = ibound_chd   
+
+
+# In[7]:
+
+
 bas = flopy.modflow.ModflowBas(mf, ibound=ibound, strt=strt)
 # https://modflowpy.github.io/flopydoc/mflpf.html
-lpf = flopy.modflow.ModflowLpf(mf, hk=hk, vka=vka, sy=sy, ss=ss, laytyp=laytyp, ipakcb=53,
-        hdry=+1e-30,wetfct=0.1,iwetit=3,laywet=1,wetdry=-1)
+head_dry_m=1e-30
+# wetfct (float) – is a factor that is included in the
+#calculation of the head that is initially established at
+#a cell when it is converted from dry to wet. (default is 0.1).
+wetfct =0.1 #0.05
 
+# iwetit (int) – is the iteration interval for attempting to wet cells.
+# Wetting is attempted every IWETIT iteration. If using the PCG solver (Hill, 1990), 
+# his applies to outer iterations, 
+# not inner iterations. If IWETIT less than or equal to 0, it is changed to 1. (default is 1).
+iwetit = 3
+
+# laywet (int or array of ints (nlay)) – contains a flag for each layer that indicates 
+# if wetting is active. 0 wetting is inactive not 0 wetting is active (default is 0).
+laywet = 1 
+
+# wetdry (float or array of floats (nlay, nrow, ncol)) – is a combination of the wetting 
+# threshold and a flag to indicate which neighboring cells can cause a cell to become wet. 
+# (default is -0.01).
+wetdry = -0.01 #-1
+
+lpf = flopy.modflow.ModflowLpf(mf, 
+                               hk  = hk, 
+                               vka = vka, 
+                               sy  = sy, 
+                               ss  = ss, 
+                               laytyp = laytyp, 
+                               ipakcb = 53,
+                               hdry   = head_dry_m,
+                               wetfct = wetfct,
+                               iwetit = iwetit,
+                               laywet = laywet,
+                               wetdry = wetdry)
 pcg = flopy.modflow.ModflowPcg(mf)
 
 
+# In[8]:
 
-#%% plot grid and ibound to show results
-fig = plt.figure(figsize=(12, 9))
-ax  = fig.add_subplot(1, 1, 1, aspect="equal")
+
+fig = plt.figure(figsize=(10, 4))
+ax  = fig.add_subplot(1, 1, 1)
 modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
 arr = modeLx_msect.plot_array(ibound)
 modeLx_msect.plot_grid()
 plt.colorbar(arr, shrink=0.5, ax=ax)
+ax.set_ylabel("X (m)")
+ax.set_xlabel("Z (m)")
+ax.set_title("ibound values")
+#ax.legend()
 
 
-# %%
+# In[9]:
 
 
-#dis.sr.xcentergrid
-#dis.sr.ycentergrid
-#dis.sr.xgrid
-#dis.sr.ygrid
-#np.ma.masked_equal(dis.sr.ygrid,1000) # very useful command to find specific file locations
-#modelmap.sr.vertices
-#flopy.plot.plotutil.cell_value_points
-#
-#
-#modeLx_msect = flopy.plot.Modelc_mrossSection(model=mf, line={'Row': 0})
-#modeLx_msect.elev
-#
-#modeLx_msect.dis
-#modeLx_msect.xpts
-#modeLx_msect.xcentergrid
-#modeLx_msect.zcentergrid
-
-#from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.ticker import LinearLocator, FormatStrFormatter
-# ibound nlay,nrow,ncol
-#slicing a row for crosection plot
-
-ib=ibound[:,0,:]
-ib=hk[:,0,:]
-
-fig = plt.figure()
-#modeLx_msect = flopy.plot.Modelc_mrossSection(model=mf, line={'Row': 0})
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
-#surf = ax.plot_surface(modeLx_msect.xcentergrid, modeLx_msect.zcentergrid, ib, cmap=cm.coolwarm,
-#                       linewidth=0, antialiased=False)
-#plt.show(block=False)
-
-
-'''
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.ticker import LinearLocator, FormatStrFormatter
-import numpy as np
-fig = plt.figure()
-ax = fig.gca(projection='3d')
-
-# Make data.
-X = np.arange(-5, 5, 0.25)
-Y = np.arange(-5, 5, 0.25)
-X, Y = np.meshgrid(X, Y)
-R = np.sqrt(X**2 + Y**2)
-Z = np.sin(R)
-# Plot the surface.
-surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
-                               linewidth=0, antialiased=False)
-# Customize the z axis.
-ax.set_zlim(-1.01, 1.01)
-ax.zaxis.set_major_locator(LinearLocator(10))
-ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
-# Add a color bar which maps values to colors.
-fig.colorbar(surf, shrink=0.5, aspect=5)
-plt.show()
-'''
-
-# we are supposed to use CHD boundary here not GHB boundary
-'''
-# Make list for stress period 1
-stageleft = 10.
-stageright = 10.
-bound_sp1 = []
-for il in range(nlay):
-    condleft = hk * (stageleft - zbot_m) * delc_m
-    condright = hk * (stageright - zbot_m) * delc_m
-    for ir in range(nrow):
-        bound_sp1.append([il, ir, 0, stageleft, condleft])
-        bound_sp1.append([il, ir, ncol - 1, stageright, condright])
-print('Adding ', len(bound_sp1), 'GHBs for stress period 1.')
-
-# Make list for stress period 2
-stageleft = 10.
-stageright = 0.
-condleft = hk * (stageleft - zbot_m) * delc_m
-condright = hk * (stageright - zbot_m) * delc_m
-bound_sp2 = []
-for il in range(nlay):
-    for ir in range(nrow):
-        bound_sp2.append([il, ir, 0, stageleft, condleft])
-        bound_sp2.append([il, ir, ncol - 1, stageright, condright])
-print('Adding ', len(bound_sp2), 'GHBs for stress period 2.')
-
-# We do not need to add a dictionary entry for stress period 3.
-# Flopy will automaticalLy_m take the list from stress period 2 and appLy_m it
-# to the end of the simulation, if necessary
-stress_period_data = {0: bound_sp1, 1: bound_sp2}
-
-# Create the flopy ghb object
-ghb = flopy.modflow.ModflowGhb(mf, stress_period_data=stress_period_data)
-'''
-
-#chd={0:[
-#       [0,0,0,1,2],
-#       [0,0,2,1,2],
-#       ]
-#    }
-
-ibound_chd_mask=np.ma.masked_equal(ibound,ibound_chd)
-
-chd_node_index=np.where(ibound_chd_mask.mask)
-
-
+ibound_chd_mask = np.ma.masked_equal(ibound,ibound_chd)
+chd_node_index = np.where(ibound_chd_mask.mask)
 stress_period_data = {}
-
 bound_sp0 = []
 for i in np.arange(np.sum(ibound_chd_mask.mask)):
-   bound_sp0.append([chd_node_index[0][i],chd_node_index[1][i],chd_node_index[2][i],0,0]  )
+   bound_sp0.append([chd_node_index[0][i], chd_node_index[1][i], chd_node_index[2][i] , -1 , -1]  )
 bound_sp1=[]
 for i in np.arange(np.sum(ibound_chd_mask.mask)):
    bound_sp1.append([chd_node_index[0][i],chd_node_index[1][i],chd_node_index[2][i],-10,-10]  )
-
 bound_sp2=[]
 for i in np.arange(np.sum(ibound_chd_mask.mask)):
-   bound_sp2.append([chd_node_index[0][i],chd_node_index[1][i],chd_node_index[2][i],0,0]  )
-
-
+   bound_sp2.append([chd_node_index[0][i],chd_node_index[1][i],chd_node_index[2][i],-0.1,-0.1]  )
 
 stress_period_data={0:bound_sp0,1:bound_sp1,2:bound_sp2}
 
+chd=flopy.modflow.mfchd.ModflowChd(model=mf,
+                                   stress_period_data=stress_period_data)
 
-# write to chd package
-chd=flopy.modflow.mfchd.ModflowChd(model=mf,stress_period_data=stress_period_data)
 
+# In[10]:
 
-#flopy.modflow.mfchd.ModflowChd(model=mf,stress_period_data=chd)
 
 stress_period_data = {}
 for kper in range(nper):
-    for kstp in range(nstp[kper]):
-        if np.mod(kstp,49)==0:
+    for kstp in range(nstp_list[kper]):
+        if np.mod(kstp,2)==0:
             stress_period_data[(kper, kstp)] = ['save head',
                                                 'save drawdown',
                                                 'save budget',
@@ -256,137 +217,328 @@ for kper in range(nper):
 oc = flopy.modflow.ModflowOc(mf, stress_period_data=stress_period_data,compact=True)
 
 
+# In[11]:
+
+
 mf.write_input()
 
 
-# %%
-# Run the model
+# #### Run the model
+
+# In[12]:
+
+
 success, mfoutput = mf.run_model(silent=True, pause=False, report=True)
 if not success:
         raise Exception('MODFLOW did not terminate normalLy_m.')
 
 
-# Imports
-import matplotlib.pyplot as plt
-import flopy.utils.binaryfile as bf
+# In[13]:
 
 
-# Create the headfile and budget file objects
 headobj = bf.HeadFile(modelname+'.hds')
 times_headobj = headobj.get_times()
 cbbobj = bf.CellBudgetFile(modelname+'.cbc')
 times_cbbobj = cbbobj.get_times()
 # beginning of the first stress period
-# end of the first stress period
-#times_output_list_day = [100.0, 101.0, 201.0,251]  
-#times_output_list_day = [100/2, 200.0/2, 300/2] 
-#times_output_list_day = [100, 200.0, 300] 
-#times_output_list_day = [50, 150.0, 250] 
-times_output_list_day = [99, 101.0, 201,250]
+times_output_list_day = np.array([98, 100.0, 150,198,200,250,298])  + perlen /  float(nstp)
 
-fig = plt.figure(figsize=(8, 3))
-ax = fig.add_subplot(1, 1, 1)
-#modeLx_msect = flopy.plot.Modelc_mrossSection(model=mf, line={'Column': 5})  # this will onLy_m work when nrow is more than 1
-##CM modeLx_msect = flopy.plot.Modelc_mrossSection(model=mf, line={'Row': 0})
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
-patches = modeLx_msect.plot_ibound()
-linecollection = modeLx_msect.plot_grid()
-t = ax.set_title('Row 0 Cross-Section with IBOUND Boundary Conditions')
-
-#plot(dis.sr.xcentergrid.shape,head[0,0,:])
-# head = headobj.get_data(totim=times_output_list_day[2])
-# ax.plot(dis.sr.xcentergrid[0,:],head[-1,0,:])
-head = headobj.get_data(totim=times_output_list_day[1])
-ax.plot(dis.get_node_coordinates()[1],head[-1,0,:])
-head = headobj.get_data(totim=times_output_list_day[1])
-head[head==1e-30]=np.nan
+print(times_cbbobj)
 
 
-
-# %% Plot the Head distribution at the end of stress period 1
-#
-fig = plt.figure(figsize=(8, 3))
-ax  = fig.add_subplot(1, 1, 1)
-t   = ax.set_title('Head distribution at the end of stress period 1, day %i' %(times_output_list_day[0]))
-head = headobj.get_data(totim=times_output_list_day[0])
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
-arr = modeLx_msect.plot_array(head)
-grd = modeLx_msect.plot_grid()
-ax.plot(dis.get_node_coordinates()[1] , head[-1,0,:], linewidth=5.0)
-plt.colorbar(arr, shrink=1, ax=ax)
-ax.set_xlabel('X (m)')
-ax.set_ylabel('Z (m)')
+# In[14]:
 
 
-times = cbbobj.get_times()
-qx = cbbobj.get_data(text="flow right face", totim=times_output_list_day[0])[0]
-qy = np.zeros((nlay, nrow, ncol), dtype=float)
-qz = cbbobj.get_data(text="flow lower face", totim=times_output_list_day[0])[0]
-
-modeLx_msect.plot_vector(qx, qy, -qz, color="white", kstep=1, hstep=1)
-# %% Plot the Head distribution at the end of stress period 1
-#
-fig = plt.figure(figsize=(8, 3))
-ax  = fig.add_subplot(1, 1, 1)
-t   = ax.set_title('Head distribution at the end of stress period 1, day %i' %(times_output_list_day[1]))
-head = headobj.get_data(totim=times_output_list_day[1])
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
-arr = modeLx_msect.plot_array(head)
-grd = modeLx_msect.plot_grid()
-ax.plot(dis.get_node_coordinates()[1] , head[-1,0,:], linewidth=5.0)
-plt.colorbar(arr, shrink=1, ax=ax)
-ax.set_xlabel('X (m)')
-ax.set_ylabel('Z (m)')
-
-times = cbbobj.get_times()
-qx = cbbobj.get_data(text="flow right face", totim=times_output_list_day[1])[0]
-qy = np.zeros((nlay, nrow, ncol), dtype=float)
-qz = cbbobj.get_data(text="flow lower face", totim=times_output_list_day[1])[0]
-
-modeLx_msect.plot_vector(qx, qy, -qz, color="white", kstep=1, hstep=1)
+print(times_headobj)
 
 
-# %% Plot the Head distribution at the end of stress period 2
-#
-fig = plt.figure(figsize=(8, 3))
-ax  = fig.add_subplot(1, 1, 1)
-t   = ax.set_title('Head distribution at the end of stress period 1, day %i' %(times_output_list_day[2]))
-head = headobj.get_data(totim=times_output_list_day[2])
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
-arr = modeLx_msect.plot_array(head)
-grd = modeLx_msect.plot_grid()
-ax.plot(dis.get_node_coordinates()[1], head[-1,0,:], linewidth=5.0,)
-plt.colorbar(arr, shrink=1, ax=ax)
-ax.set_xlabel('X (m)')
-ax.set_ylabel('Z (m)')
+# In[15]:
 
-times = cbbobj.get_times()
-qx = cbbobj.get_data(text="flow right face", totim=times[4])[0]
-qy = np.zeros((nlay, nrow, ncol), dtype=float)
-qz = cbbobj.get_data(text="flow lower face", totim=times[4])[0]
 
-modeLx_msect.plot_vector(qx, qy, -qz, color="white", kstep=1, hstep=1)
-#CMsurf = ax.plot_surface(modeLx_msect.xcenters, modeLx_msect.xcenters, head[:,0,:], cmap=cm.coolwarm,
-#CM                       linewidth=0, antialiased=False)
-# %% Plot the Head distribution at the end of stress period 3
-#
-fig = plt.figure(figsize=(8, 3))
-ax  = fig.add_subplot(1, 1, 1)
-t   = ax.set_title('Head distribution at the end of stress period 1, day %i' %(times_output_list_day[3]))
-head = headobj.get_data(totim=times_output_list_day[3])
-modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
-arr = modeLx_msect.plot_array(head)
-grd = modeLx_msect.plot_grid()
-ax.plot(dis.get_node_coordinates()[1] , head[-1,0,:], linewidth=5.0,)
-plt.colorbar(arr, shrink=1, ax=ax)
-ax.set_xlabel('X (m)')
-ax.set_ylabel('Z (m)')
+tsList = headobj.get_kstpkper()
+head_array_timeid_lrc_m = np.empty([len(times_cbbobj)],object)
+for i,j in enumerate(times_cbbobj):
+    #print(i,j)
+    head_array_timeid_lrc_m[i]=  headobj.get_data(totim=j)
 
-times = cbbobj.get_times()
-qx = cbbobj.get_data(text="flow right face", totim=times[5])[0]
-qy = np.zeros((nlay, nrow, ncol), dtype=float)
-qz = cbbobj.get_data(text="flow lower face", totim=times[5])[0]
 
-modeLx_msect.plot_vector(qx, qy, -qz, color="white", kstep=1, hstep=1)
-#CMsurf = ax.plot_surface(modeLx_msect.xcenters, modeLx_msect.xcenters, head[:,0,:], cmap=cm.coolwarm,
-#CM                       linewidth=0, antialiased=False)
+# In[16]:
+
+
+print(tsList)
+
+
+# In[17]:
+
+
+np.set_printoptions(suppress=False,precision=2)  #organise the matrix output better
+
+
+# In[18]:
+
+
+def plot_head_distribution_watertable(output_time_index = 1):
+    fig = plt.figure(figsize=(8, 3))
+    ax  = fig.add_subplot(1, 1, 1)
+    t   = ax.set_title('Head distribution at  day %i' %(times_output_list_day[output_time_index]))
+    head = headobj.get_data(totim=times_output_list_day[output_time_index])
+    modeLx_msect = flopy.plot.PlotCrossSection(model=mf, line={'Row': 0})
+    arr = modeLx_msect.plot_array(head,masked_values= [head_dry_m])
+    grd = modeLx_msect.plot_grid()
+    ax.plot(dis.get_node_coordinates()[1] , head[-1,0,:], linewidth=5.0,)
+    plt.colorbar(arr, shrink=1, ax=ax)
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Z (m)')
+    times = cbbobj.get_times()
+    qx = cbbobj.get_data(text="flow right face", totim=times[output_time_index])[0]
+    qy = np.zeros((nlay, nrow, ncol), dtype=float)
+    qz = cbbobj.get_data(text="flow lower face", totim=times[output_time_index])[0]
+    modeLx_msect.plot_vector(qx, qy, -qz, color="white", kstep=1, hstep=1)
+
+
+# Note dry cells are given as non-colored cells
+
+# In[19]:
+
+
+plot_head_distribution_watertable(output_time_index = 0)
+
+
+# In[20]:
+
+
+plot_head_distribution_watertable(output_time_index = 1)
+
+
+# In[21]:
+
+
+plot_head_distribution_watertable(output_time_index = 2)
+
+
+# In[22]:
+
+
+plot_head_distribution_watertable(output_time_index = 3)
+
+
+# In[23]:
+
+
+plot_head_distribution_watertable(output_time_index = 4)
+
+
+# In[24]:
+
+
+plot_head_distribution_watertable(output_time_index = 5)
+
+
+# In[25]:
+
+
+plot_head_distribution_watertable(output_time_index = 6)
+
+
+# In[26]:
+
+
+head_array_301_m =np.array([i[3,0,1] for i in head_array_timeid_lrc_m[:]])
+print(head_array_301_m)
+
+
+# In[27]:
+
+
+# find the lrc of some key point and extrat the head at the point over time.
+
+point_1 = {'x':500,'y':5,'z':-15}
+(point_1['l'],point_1['r'],point_1['c'] )= get_lrc_from_coordinates(
+    point_1['x'],
+    point_1['y'],
+    point_1['z'])
+point_1['head_time_ay']=np.array(
+    [ i[point_1['l'],point_1['r'],point_1['c']] for i in head_array_timeid_lrc_m ])
+point_1 ['label']= 'x={:1.1e}'.format(point_1['x']) +  ', z={:1.1e}'.format(point_1['z'])
+
+
+point_chd['head_time_ay']=np.array(
+    [ i[point_chd['l'],point_chd['r'],point_chd['c']] for i in head_array_timeid_lrc_m ])
+point_chd ['label']= 'x={:1.1e}'.format(point_chd['x']) +  ', z={:1.1e}'.format(point_chd['z'])
+
+point_2 = {'x':1000,'y':5,'z':-15}
+(point_2['l'],point_2['r'],point_2['c'] )= get_lrc_from_coordinates(
+    point_2['x'],
+    point_2['y'],
+    point_2['z'])
+point_2['head_time_ay']=np.array(
+    [ i[point_2['l'],point_2['r'],point_2['c']] for i in head_array_timeid_lrc_m ])
+point_2 ['label']= 'x={:1.1e}'.format(point_2['x']) +  ', z={:1.1e}'.format(point_2['z'])
+
+point_3 = {'x':200,'y':5,'z':-5}
+(point_3['l'],point_3['r'],point_3['c'] )= get_lrc_from_coordinates(
+    point_3['x'],
+    point_3['y'],
+    point_3['z'])
+point_3['head_time_ay']=np.array(
+    [ i[point_3['l'],point_3['r'],point_3['c']] for i in head_array_timeid_lrc_m ])
+point_3 ['label']= 'x={:1.1e}'.format(point_3['x']) +  ', z={:1.1e}'.format(point_3['z'])
+point_3['head_time_ay'][point_3['head_time_ay'] == head_dry_m]= np.nan
+
+
+# In[33]:
+
+
+fig, axes = plt.subplots(
+    ncols=2,
+    nrows=1,
+    sharex=True,
+    figsize=(8.3, 4.3),
+    constrained_layout=True,
+)
+
+title_str ='kh = {:1.1e}'.format(kh_mPday) + '_ nlay = {:1.1e}'.format(nlay)     +'_ sy = {:1.1e}'.format(sy) + '_ wetfct = {:1.1e}'.format(wetfct)     + '_ nstp = {:1.1e}'.format(nstp)+ '_ wetdry = {:1.1e}'.format(wetdry)
+    
+fig.suptitle(title_str,fontsize=10)
+
+ax = axes[0]
+# ax.set_ylim(110, 130)
+
+ax.plot(
+    times_headobj,
+    point_chd['head_time_ay'],
+    lw=1.75,
+    ls="-",
+    color="red",
+    label=point_chd ['label'],
+)
+
+ax.plot(
+    times_headobj,
+    point_1['head_time_ay'],
+    lw=1.75,
+    ls="-",
+    color="green",
+    label=point_1 ['label'],
+)
+
+ax.plot(
+    times_headobj,
+    point_2['head_time_ay'],
+    lw=1.75,
+    ls="-",
+    color="blue",
+    label=point_2 ['label'],
+)
+
+ax.plot(
+    times_headobj,
+    point_3['head_time_ay'],
+    lw=1.75,
+    ls="-",
+    color="cyan",
+    label=point_3 ['label'],
+)
+
+ax.legend(loc="lower right",fontsize=10)
+ax.set_title("Head over time at fixed points")    
+ax.set_ylabel("Head in Metres")
+ax.set_xlabel("Time (days)")
+ax.grid()
+axes[0].set_xlim([0, times_cbbobj[-1]])
+# fs.graph_legend(ax, loc="upper right")
+# fs.heading(ax, idx=0)
+
+ax = axes[1]
+
+head_idx=0;head = headobj.get_data(totim=times_output_list_day[head_idx])
+ax.plot(dis.get_node_coordinates()[1] , 
+        head[-1,0,:], 
+        linewidth=2.0,
+        color='red',
+        label= "day " + str(times_output_list_day[head_idx]),
+       )
+head_idx=1;head = headobj.get_data(totim=times_output_list_day[head_idx])
+ax.plot(dis.get_node_coordinates()[1] , 
+        head[-1,0,:], 
+        linewidth=2.0,
+        color='green',
+        label= "day " + str(times_output_list_day[head_idx]),
+       )
+head_idx=2;head = headobj.get_data(totim=times_output_list_day[head_idx])
+ax.plot(dis.get_node_coordinates()[1] , 
+        head[-1,0,:], 
+        linewidth=2.0,
+        color='blue',
+        label= "day " + str(times_output_list_day[head_idx]),
+       )
+head_idx=3;head = headobj.get_data(totim=times_output_list_day[head_idx])
+ax.plot(dis.get_node_coordinates()[1] , 
+        head[-1,0,:], 
+        linewidth=2.0,
+        color='cyan',
+        label= "day " + str(times_output_list_day[head_idx]),
+       )
+head_idx=4;head = headobj.get_data(totim=times_output_list_day[head_idx])
+ax.plot(dis.get_node_coordinates()[1] , 
+        head[-1,0,:], 
+        linewidth=2.0,
+        color='brown',
+        label= "day " + str(times_output_list_day[head_idx]),
+       )
+head_idx=5;head = headobj.get_data(totim=times_output_list_day[head_idx])
+ax.plot(dis.get_node_coordinates()[1] , 
+        head[-1,0,:], 
+        linewidth=2.0,
+        color='black',
+        label= "day " + str(times_output_list_day[head_idx]),
+       )
+head_idx=6;head = headobj.get_data(totim=times_output_list_day[head_idx])
+pl=ax.plot(dis.get_node_coordinates()[1] , 
+        head[-1,0,:], 
+        linewidth=2.0,
+        color='gray',
+        label= "day " + str(times_output_list_day[head_idx]),
+       )
+ax.grid()
+ax.legend(loc="upper right",fontsize=10)
+ax.set_title("Head at the bottom layer at specific points")    
+ax.set_ylabel("Head in Metres")
+ax.set_xlabel("X (m)")
+#ax.set_xlim([0, Lx_m])
+#axes.axes.set_xlim([0, 300])
+axes[1].set_xlim([0, 1000])
+fname_save=title_str.replace(';', ' ').replace('+', '').replace('e-', 'ne')     .replace('=', '_').replace(' ', '')
+print(fname_save)
+plt.savefig(fname_save+'.png',dpi=300)
+
+
+# In[29]:
+
+
+dis.get_lrc(5)
+
+
+# In[30]:
+
+
+dis.get_node_coordinates()[2]
+
+
+# In[31]:
+
+
+def get_lrc_from_coordinates(x,y,z,dis=dis) :
+    """
+    function to get the lrc of the coordinates. 
+    """
+    [row,column]= dis.get_rc_from_node_coordinates(x,y)
+    layer = dis.get_layer(row,column,z)
+    return (layer, row , column)
+
+
+# In[32]:
+
+
+dis.get_layer(0,4,-15)
+
