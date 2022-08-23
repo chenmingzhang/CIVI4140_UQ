@@ -1,15 +1,28 @@
+% This is the list of commands and scripts used for the MATLAB crash course
+
+% 1. why MATLAB, why not excel? multiple dimensions, large datasets, libraries
+% 2. what is MATLAB
+% 3. Interface
+%   3.1 current folder, workspace, command window, editor
+%   3.2 check current working directory, ensure that working directory is at a local path to maximise the calculation speed.
+%   3.3 use help on the daily basis.
+
+
+%% below are the list of commands to run through
 pwd  % show current working directory address
 ls   % show current directory
-help pwd % get help 
+help pwd % get help, second way to help is
 3-5
 cos(2*3.14)
+clear    % clear the variable defined
+clc
 a=3-5
 b=cos(2*pi)
 a-b
 c=a-b
 a=a-b
 d-b
-a-b;
+a-b;   # supress the output, but the command is executed.
 d=.6
 
 b-d*c/b*a^b*a-e    % BEDMAS
