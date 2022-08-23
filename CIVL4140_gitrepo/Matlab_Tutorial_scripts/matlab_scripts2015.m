@@ -261,5 +261,6 @@ savefig(fig2,'fig2.fig')
 %https://www.youtube.com/watch?v=h-ld0Yj7zq4&t
 %https://www.youtube.com/watch?v=cfXoisC7QDE
 
-
+% To practis MATLAB, it is suggested to program the questions listed in the file below.
+https://docs.google.com/document/d/18yqq0mHEVrBGt6cjJKKu6eYiTUh6duhc/edit?usp=sharing&ouid=110690160017580358063&rtpof=true&sd=true
 
